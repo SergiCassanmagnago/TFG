@@ -78,20 +78,19 @@ func sink(ostream string, istream string, inv <-chan map[int]bool, endchan chan<
 
 	for {
 		cc, ok := <-inv
-		if ok {
-			f.WriteString("{")
-			i := 0
-			for node := range cc {
-				f.WriteString(strconv.Itoa(node))
-				i++
-				if i != len(cc) {
-					f.WriteString(", ")
-				}
-			}
-			f.WriteString("}\n\n")
-		} else {
+		if !ok {
 			break
 		}
+		f.WriteString("{")
+		i := 0
+		for node := range cc {
+			f.WriteString(strconv.Itoa(node))
+			i++
+			if i != len(cc) {
+				f.WriteString(", ")
+			}
+		}
+		f.WriteString("}\n\n")
 	}
 	endchan <- "Execution complete"
 	close(endchan)
@@ -101,20 +100,19 @@ func sink(ostream string, istream string, inv <-chan map[int]bool, endchan chan<
 func generator(ine <-chan edge, inv <-chan map[int]bool, outv chan<- map[int]bool) {
 	for {
 		e, ok := <-ine
-		if ok {
-			fmt.Printf("Filter instance created with x = %v, y = %v\n", e.x, e.y)
-			ineNew := make(chan edge)
-			invNew := make(chan map[int]bool)
-			go filter(ine, inv, ineNew, invNew, map[int]bool{e.x: true, e.y: true})
-			ine = ineNew
-			inv = invNew
-		} else {
+		if !ok {
 			break
 		}
+		fmt.Printf("Filter instance created with x = %v, y = %v\n", e.x, e.y)
+		ineNew := make(chan edge)
+		invNew := make(chan map[int]bool)
+		go filter(ine, inv, ineNew, invNew, map[int]bool{e.x: true, e.y: true})
+		ine = ineNew
+		inv = invNew
 	}
 	for {
 		g, ok := <-inv
-		if _, b := g[-1]; b == false && ok {
+		if _, b := g[-1]; !b && ok {
 			fmt.Printf("Generator: received eof %v\n", g)
 			outv <- g
 		} else {
@@ -131,16 +129,15 @@ func filter(ine <-chan edge, inv <-chan map[int]bool,
 	//Actor1 Phase
 	for {
 		e, ok := <-ine
-		if ok {
-			if _, ok := cc[e.x]; ok == true { //if cc contains x, then y is added to cc
-				cc[e.y] = true
-			} else if _, ok := cc[e.y]; ok == true { //otherwise, if cc contains y, then x is added to cc
-				cc[e.x] = true
-			} else { //otherwise r is passed to the next stage
-				oute <- e
-			}
-		} else {
+		if !ok {
 			break
+		}
+		if _, ok := cc[e.x]; ok { //if cc contains x, then y is added to cc
+			cc[e.y] = true
+		} else if _, ok := cc[e.y]; ok { //otherwise, if cc contains y, then x is added to cc
+			cc[e.x] = true
+		} else { //otherwise r is passed to the next stage
+			oute <- e
 		}
 	}
 	close(oute)
@@ -148,11 +145,11 @@ func filter(ine <-chan edge, inv <-chan map[int]bool,
 	//Actor2 Phase
 	for {
 		g, _ := <-inv
-		if _, ok := g[-1]; ok == true { //eof so no more sets of vertices will be received
+		if _, ok := g[-1]; ok { //eof so no more sets of vertices will be received
 			fmt.Printf("Actor2 eof: Passing %v\n", cc)
 			break
 		} else {
-			if intersection(cc, g) == true { //the components are connected so they are merged
+			if intersection(cc, g) { //the components are connected so they are merged
 				cc = union(cc, g)
 				fmt.Printf("Actor2 merge: %v\n", cc)
 			} else { //the components are not connected so they are passed separately
