@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// Edges are formed by pairs of vertexes (x,y)
 type edge struct {
 	x, y int
 }
@@ -19,6 +20,7 @@ func check(e error) {
 	}
 }
 
+// Function that checks if two connected components intersect
 func intersection(cc map[int]bool, ccin map[int]bool) bool {
 	if len(cc) > len(ccin) {
 		cc, ccin = ccin, cc
@@ -31,6 +33,7 @@ func intersection(cc map[int]bool, ccin map[int]bool) bool {
 	return false
 }
 
+// Function that returns the union of two connected components
 func union(cc map[int]bool, ccin map[int]bool) map[int]bool {
 	ccunion := map[int]bool{}
 	for k := range cc {
@@ -44,10 +47,13 @@ func union(cc map[int]bool, ccin map[int]bool) map[int]bool {
 
 // Source stage
 func source(istream string, ine chan<- edge, inv chan<- map[int]bool) {
+
+	// Open the input file and close it after executing
 	file, err := os.Open(istream + ".requests")
 	check(err)
 	defer file.Close()
 
+	// Parse the edges of the file and send them to the next stage
 	var e edge
 	for {
 		_, err = fmt.Fscanf(file, "%d%d\n", &e.x, &e.y)
@@ -62,6 +68,8 @@ func source(istream string, ine chan<- edge, inv chan<- map[int]bool) {
 		ine <- e
 	}
 	close(ine)
+
+	// Send EOF signal to the next stage when all edges have been sent
 	inv <- map[int]bool{-1: true}
 	close(inv)
 	file.Close()
@@ -69,13 +77,13 @@ func source(istream string, ine chan<- edge, inv chan<- map[int]bool) {
 
 // Sink stage
 func sink(ostream string, istream string, inv <-chan map[int]bool, endchan chan<- string) {
+
+	// Create output file and close it after executing
 	file, err := os.Create(ostream + ".wcc")
 	check(err)
 	defer file.Close()
 
-	_, err = file.WriteString("Weakly Connected components of graph " + istream + ":\n\n")
-	check(err)
-
+	// Print all connected components separated by newline
 	for {
 		cc, ok := <-inv
 		if !ok {
@@ -92,28 +100,32 @@ func sink(ostream string, istream string, inv <-chan map[int]bool, endchan chan<
 		}
 		file.WriteString("}\n\n")
 	}
+
+	// Send message through endchan to conclude the execution
 	endchan <- "Execution complete"
 	close(endchan)
 }
 
 // Generator stage
 func generator(ine <-chan edge, inv <-chan map[int]bool, outv chan<- map[int]bool) {
+
+	// Actor1 Phase: Creates a new filter stage upon receiving a new edge
 	for {
 		e, ok := <-ine
 		if !ok {
 			break
 		}
-		fmt.Printf("Filter instance created with x = %v, y = %v\n", e.x, e.y)
 		ineNew := make(chan edge)
 		invNew := make(chan map[int]bool)
 		go filter(ine, inv, ineNew, invNew, map[int]bool{e.x: true, e.y: true})
 		ine = ineNew
 		inv = invNew
 	}
+
+	// Actor2 Phase: Sends connected components to the sink stage
 	for {
 		g, ok := <-inv
 		if _, b := g[-1]; !b && ok {
-			fmt.Printf("Generator: received eof %v\n", g)
 			outv <- g
 		} else {
 			break
@@ -122,56 +134,71 @@ func generator(ine <-chan edge, inv <-chan map[int]bool, outv chan<- map[int]boo
 	close(outv)
 }
 
-// Filter stage
+// Filter stage used for grouping edges into connected components
 func filter(ine <-chan edge, inv <-chan map[int]bool,
 	oute chan<- edge, outv chan<- map[int]bool, cc map[int]bool) {
 
-	//Actor1 Phase
+	/* Actor1 Phase: Receives edges and adds them to its connected component if they are connected,
+	otherwise they are sent to the next stage */
 	for {
 		e, ok := <-ine
 		if !ok {
 			break
 		}
-		if _, ok := cc[e.x]; ok { //if cc contains x, then y is added to cc
+
+		// if cc contains x, then y is added to cc
+		if _, ok := cc[e.x]; ok {
 			cc[e.y] = true
-		} else if _, ok := cc[e.y]; ok { //otherwise, if cc contains y, then x is added to cc
+		} else if _, ok := cc[e.y]; ok { // otherwise, if cc contains y, then x is added to cc
 			cc[e.x] = true
-		} else { //otherwise r is passed to the next stage
+		} else { // otherwise r is passed to the next stage
 			oute <- e
 		}
 	}
 	close(oute)
 
-	//Actor2 Phase
+	/* Actor2 Phase: Receives connected components from previous stages; it combines them with its
+	current connected component if the two intersect, otherwise it sends the received connected
+	component to the next stage */
 	for {
 		g, _ := <-inv
-		if _, ok := g[-1]; ok { //eof so no more sets of vertices will be received
-			fmt.Printf("Actor2 eof: Passing %v\n", cc)
+		// EOF signal received, so no more sets of vertices will be received
+		if _, ok := g[-1]; ok {
 			break
 		} else {
-			if intersection(cc, g) { //the components are connected so they are merged
+			if intersection(cc, g) { // the components are connected so they are merged
 				cc = union(cc, g)
-				fmt.Printf("Actor2 merge: %v\n", cc)
-			} else { //the components are not connected so they are passed separately
-				fmt.Printf("Actor2 %v no intersection: Passing %v\n", cc, g)
+			} else { // the components are not connected so they are passed separately
 				outv <- g
 			}
 		}
 	}
+
+	// Sends its own connected component and EOF signal to the next stage before finishing its execution
 	outv <- cc
 	outv <- map[int]bool{-1: true}
 	close(outv)
 }
 
 func main() {
-	ine := make(chan edge)          //channel transporting requests
-	inv := make(chan map[int]bool)  //channel transporting sets of connected vertices
-	outv := make(chan map[int]bool) //channel transporting sets of connected vertices
-	endchan := make(chan string)    //channel transporting sets of connected vertices
+	// Channel transporting requests
+	ine := make(chan edge)
+
+	// Channels transporting sets of connected vertices
+	inv := make(chan map[int]bool)
+	outv := make(chan map[int]bool)
+
+	// Channel used for waiting for all the results to be generated
+	endchan := make(chan string)
+
 	start := time.Now()
-	go source(os.Args[1], ine, inv) // Launch Input.
+
+	// Launch input, generator and sink stages
+	go source(os.Args[1], ine, inv)
 	go generator(ine, inv, outv)
 	go sink(os.Args[2], os.Args[1], outv, endchan)
+
+	// Wait for all the results to be generated and produce results
 	<-endchan
 	t := time.Since(start)
 	fmt.Println("TotalExecutionTime,", t, ",", t.Microseconds(), ",", t.Milliseconds(), ",", t.Seconds())
