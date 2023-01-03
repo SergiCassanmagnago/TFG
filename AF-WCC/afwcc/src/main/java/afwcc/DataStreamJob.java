@@ -37,28 +37,29 @@ public class DataStreamJob {
 
 	public static void main(String[] args) throws Exception {
 
-		// Checking input parameters
+		// Check input parameters
 		final ParameterTool params = ParameterTool.fromArgs(args);
 
 		// Maximum iterations of the algorithm
 		final int maxIterations = params.getInt("iterations", 10);
 
-		// Setting up the execution environment
+		// Set up the execution environment
 		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
-		//Reading from the input file and storing it in a list of tuples
+		// Read from the input file and store it in a list of tuples
 		File in = new File(params.get("input"));
 		List<Tuple2<Integer, Integer>> edgeTuples = getEdges(in);
 
+		// Process vertex and edge data
 		DataSet<Tuple2<Integer, Integer>> edges = env.fromCollection(edgeTuples).flatMap(new UndirectEdge());
 		DataSet<Integer> vertices = edges.flatMap(new CollectVertex()).distinct();
 		DataSet<Tuple2<Integer, Integer>> verticesWithInitialId = vertices.map(new AssignID());
 
-		// open a delta iteration
+		// Open a delta iteration
 		DeltaIteration<Tuple2<Integer, Integer>, Tuple2<Integer, Integer>> iteration =
 				verticesWithInitialId.iterateDelta(verticesWithInitialId, maxIterations, 0);
 
-		// apply the step logic: join with the edges, select the minimum neighbor, update if the
+		// Apply the step logic: join with the edges, select the minimum neighbor, update if the
 		// component of the candidate is smaller
 		DataSet<Tuple2<Integer, Integer>> changes =
 				iteration
@@ -74,11 +75,12 @@ public class DataStreamJob {
 						.equalTo(0)
 						.with(new ComponentIdFilter());
 
-		// close the delta iteration (delta and new work set are identical)
+		// Close the delta iteration and group vertices according to the connected component they belong to
 		DataSet<HashSet> cc = iteration.closeWith(changes, changes)
 				.groupBy(1)
 				.reduceGroup(new ConnectedComponents());
 
+		// Emit the resulting connected components
 		if (params.has("output")) {
 			List<HashSet> results = cc.collect();
 			OutputFile(params.get("output"), results);
@@ -89,20 +91,11 @@ public class DataStreamJob {
 		} else throw new java.lang.RuntimeException("Use --output to specify output path\n");
 	}
 
-	public static List<Tuple2<Integer, Integer>> getEdges(File file) throws FileNotFoundException {
-		List<Tuple2<Integer, Integer>> edges = new ArrayList<>();
+	// *************************************************************************
+	//     USED FUNCTIONS
+	// *************************************************************************
 
-		Scanner scan = new Scanner(file);
-		int vertex1;
-		int vertex2;
-		while (scan.hasNextLine()){
-			vertex1 = scan.nextInt();
-			vertex2 = scan.nextInt();
-			edges.add(Tuple2.of(vertex1, vertex2));
-		}
-		return edges;
-	}
-
+	// Receives an edge and emits both vertexes of the edge.
 	public static final class CollectVertex implements FlatMapFunction<Tuple2<Integer, Integer>, Integer> {
 		@Override
 		public void flatMap(Tuple2<Integer, Integer> value, Collector<Integer> out) {
@@ -111,6 +104,7 @@ public class DataStreamJob {
 		}
 	}
 
+	// Flink function that turns a vertex into a 2-tuple where both fields are that vertex.
 	@FunctionAnnotation.ForwardedFields("*->f0")
 	public static final class AssignID<T> implements MapFunction<T, Tuple2<T, T>> {
 
@@ -121,10 +115,8 @@ public class DataStreamJob {
 	}
 
 
-	/**
-	 * Undirected edges by emitting for each input edge the input edges itself and an inverted
-	 * version.
-	 */
+	// Flink Function that emits undirected edges by emitting for each input edge
+	// the input edges itself and an inverted version.
 	public static final class UndirectEdge
 			implements FlatMapFunction<Tuple2<Integer, Integer>, Tuple2<Integer, Integer>> {
 		Tuple2<Integer, Integer> invertedEdge = new Tuple2<>();
@@ -138,11 +130,9 @@ public class DataStreamJob {
 		}
 	}
 
-	/**
-	 * UDF that joins a (Vertex-ID, Component-ID) pair that represents the current component that a
-	 * vertex is associated with, with a (Source-Vertex-ID, Target-VertexID) edge. The function
-	 * produces a (Target-vertex-ID, Component-ID) pair.
-	 */
+	// Flink function that joins a (Vertex-ID, Component-ID) pair that represents the current component that a
+	// vertex is associated with, with a (Source-Vertex-ID, Target-VertexID) edge. The function
+	// produces a (Target-vertex-ID, Component-ID) pair.
 	@FunctionAnnotation.ForwardedFieldsFirst("f1->f1")
 	@FunctionAnnotation.ForwardedFieldsSecond("f1->f0")
 	public static final class NeighborWithComponentIDJoin implements JoinFunction
@@ -155,10 +145,8 @@ public class DataStreamJob {
 		}
 	}
 
-	/**
-	 * Emit the candidate (Vertex-ID, Component-ID) pair if and only if the candidate component ID
-	 * is less than the vertex's current component ID.
-	 */
+	 // Function provided by Flink that emits the (Vertex-ID, Component-ID) pair if and only if
+	 // the candidate component ID is less than the vertex's current component ID.
 	@FunctionAnnotation.ForwardedFieldsFirst("*")
 	public static final class ComponentIdFilter implements FlatJoinFunction
 			<Tuple2<Integer, Integer>, Tuple2<Integer, Integer>, Tuple2<Integer, Integer>> {
@@ -174,6 +162,7 @@ public class DataStreamJob {
 		}
 	}
 
+	// Groups all vertices belonging to a component id into a HashSet.
 	public static class ConnectedComponents
 			implements GroupReduceFunction<Tuple2<Integer, Integer>, HashSet> {
 
@@ -182,7 +171,7 @@ public class DataStreamJob {
 
 			HashSet<Integer> vertexes = new HashSet<>();
 
-			// add all vertexes of the group to the set
+			// Add all vertexes of the group to the set
 			for (Tuple2<Integer, Integer> t : iterable) {
 				vertexes.add(t.f0);
 			}
@@ -190,11 +179,34 @@ public class DataStreamJob {
 		}
 	}
 
+	// *************************************************************************
+	//     I/O METHODS
+	// *************************************************************************
+
+	// Parses edges from the specified input file and returns them in a list of tuples.
+	public static List<Tuple2<Integer, Integer>> getEdges(File file) throws FileNotFoundException {
+		List<Tuple2<Integer, Integer>> edges = new ArrayList<>();
+
+		Scanner scan = new Scanner(file);
+		int vertex1;
+		int vertex2;
+		while (scan.hasNextLine()){
+			vertex1 = scan.nextInt();
+			vertex2 = scan.nextInt();
+			edges.add(Tuple2.of(vertex1, vertex2));
+		}
+		return edges;
+	}
+
+	// Outputs the resulting connected components in the specified file.
 	public static void OutputFile(String file, List<HashSet> results) throws IOException {
+
+		// Erase previous content of the file if it exists
 		PrintWriter writer = new PrintWriter(file);
 		writer.print("");
 		writer.close();
 
+		// Write the connected components separated by newline
 		FileWriter fw = new FileWriter(file,true);
 		for (HashSet r : results){
 			fw.write(r + "\n");
