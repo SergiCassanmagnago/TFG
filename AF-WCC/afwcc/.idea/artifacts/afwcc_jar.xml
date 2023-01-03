@@ -1,5 +1,5 @@
 <component name="ArtifactManager">
-  <artifact type="jar" build-on-make="true" name="afwcc:jar">
+  <artifact type="jar" name="afwcc:jar">
     <output-path>$PROJECT_DIR$/out/artifacts/afwcc_jar</output-path>
     <root id="archive" name="afwcc.jar">
       <element id="module-output" name="afwcc" />

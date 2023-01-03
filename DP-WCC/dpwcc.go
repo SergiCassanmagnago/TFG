@@ -69,11 +69,11 @@ func source(istream string, ine chan<- edge, inv chan<- map[int]bool) {
 
 // Sink stage
 func sink(ostream string, istream string, inv <-chan map[int]bool, endchan chan<- string) {
-	f, err := os.Create(ostream + ".wcc")
+	file, err := os.Create(ostream + ".wcc")
 	check(err)
-	defer f.Close()
+	defer file.Close()
 
-	_, err = f.WriteString("Weakly Connected components of graph " + istream + ":\n\n")
+	_, err = file.WriteString("Weakly Connected components of graph " + istream + ":\n\n")
 	check(err)
 
 	for {
@@ -81,16 +81,16 @@ func sink(ostream string, istream string, inv <-chan map[int]bool, endchan chan<
 		if !ok {
 			break
 		}
-		f.WriteString("{")
+		file.WriteString("{")
 		i := 0
 		for node := range cc {
-			f.WriteString(strconv.Itoa(node))
+			file.WriteString(strconv.Itoa(node))
 			i++
 			if i != len(cc) {
-				f.WriteString(", ")
+				file.WriteString(", ")
 			}
 		}
-		f.WriteString("}\n\n")
+		file.WriteString("}\n\n")
 	}
 	endchan <- "Execution complete"
 	close(endchan)

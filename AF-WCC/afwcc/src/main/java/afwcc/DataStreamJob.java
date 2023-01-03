@@ -26,12 +26,12 @@ import org.apache.flink.api.java.operators.DeltaIteration;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.api.java.ExecutionEnvironment;
-import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.util.Collector;
 
-import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.*;
 import java.util.*;
+
+import static org.apache.flink.core.fs.FileSystem.WriteMode.OVERWRITE;
 
 public class DataStreamJob {
 
@@ -47,8 +47,8 @@ public class DataStreamJob {
 		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 
 		//Reading from the input file and storing it in a list of tuples
-		File file = new File(params.get("input"));
-		List<Tuple2<Integer, Integer>> edgeTuples = getEdges(file);
+		File in = new File(params.get("input"));
+		List<Tuple2<Integer, Integer>> edgeTuples = getEdges(in);
 
 		DataSet<Tuple2<Integer, Integer>> edges = env.fromCollection(edgeTuples).flatMap(new UndirectEdge());
 		DataSet<Integer> vertices = edges.flatMap(new CollectVertex()).distinct();
@@ -74,14 +74,16 @@ public class DataStreamJob {
 						.equalTo(0)
 						.with(new ComponentIdFilter());
 
-		// close the delta iteration (delta and new workset are identical)
-		DataSet<HashSet> result = iteration.closeWith(changes, changes)
+		// close the delta iteration (delta and new work set are identical)
+		DataSet<HashSet> cc = iteration.closeWith(changes, changes)
 				.groupBy(1)
 				.reduceGroup(new ConnectedComponents());
-		result.print();
 
 		if (params.has("output")) {
-			result.writeAsText(params.get("output"), FileSystem.WriteMode.valueOf("OVERWRITE")).setParallelism(1);
+			List<HashSet> results = cc.collect();
+			OutputFile(params.get("output"), results);
+			cc.writeAsText(params.get("output"), OVERWRITE).setParallelism(1);
+
 			// execute program
 			env.execute("Connected Components");
 		} else throw new java.lang.RuntimeException("Use --output to specify output path\n");
@@ -179,15 +181,24 @@ public class DataStreamJob {
 		public void reduce(Iterable<Tuple2<Integer, Integer>> iterable, Collector<HashSet> collector) {
 
 			HashSet<Integer> vertexes = new HashSet<>();
-			Integer key = null;
 
 			// add all vertexes of the group to the set
 			for (Tuple2<Integer, Integer> t : iterable) {
-				key = t.f1;
 				vertexes.add(t.f0);
 			}
-
 			collector.collect(vertexes);
 		}
+	}
+
+	public static void OutputFile(String file, List<HashSet> results) throws IOException {
+		PrintWriter writer = new PrintWriter(file);
+		writer.print("");
+		writer.close();
+
+		FileWriter fw = new FileWriter(file,true);
+		for (HashSet r : results){
+			fw.write(r + "\n");
+		}
+		fw.close();
 	}
 }
