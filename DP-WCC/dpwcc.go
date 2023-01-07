@@ -76,7 +76,7 @@ func source(istream string, ine chan<- edge, inv chan<- map[int]bool) {
 }
 
 // Sink stage
-func sink(ostream string, istream string, inv <-chan map[int]bool, endchan chan<- string) {
+func sink(ostream string, istream string, mode string, inv <-chan map[int]bool, endchan chan<- string) {
 
 	// Create output file and close it after executing
 	file, err := os.Create(ostream + ".wcc")
@@ -84,21 +84,25 @@ func sink(ostream string, istream string, inv <-chan map[int]bool, endchan chan<
 	defer file.Close()
 
 	// Print all connected components separated by newline
-	for {
-		cc, ok := <-inv
-		if !ok {
-			break
-		}
-		file.WriteString("{")
-		i := 0
-		for node := range cc {
-			file.WriteString(strconv.Itoa(node))
-			i++
-			if i != len(cc) {
-				file.WriteString(", ")
+	if mode == "print" {
+		for {
+			cc, ok := <-inv
+			if !ok {
+				break
 			}
+			file.WriteString("{")
+			i := 0
+			for node := range cc {
+				file.WriteString(strconv.Itoa(node))
+				i++
+				if i != len(cc) {
+					file.WriteString(", ")
+				}
+			}
+			file.WriteString("}\n\n")
 		}
-		file.WriteString("}\n\n")
+	} else if mode == "test" {
+		//generate traces
 	}
 
 	// Send message through endchan to conclude the execution
@@ -181,6 +185,9 @@ func filter(ine <-chan edge, inv <-chan map[int]bool,
 }
 
 func main() {
+
+	start := time.Now()
+
 	// Channel transporting requests
 	ine := make(chan edge)
 
@@ -191,12 +198,10 @@ func main() {
 	// Channel used for waiting for all the results to be generated
 	endchan := make(chan string)
 
-	start := time.Now()
-
 	// Launch input, generator and sink stages
 	go source(os.Args[1], ine, inv)
 	go generator(ine, inv, outv)
-	go sink(os.Args[2], os.Args[1], outv, endchan)
+	go sink(os.Args[2], os.Args[1], os.Args[3], outv, endchan)
 
 	// Wait for all the results to be generated and produce results
 	<-endchan
