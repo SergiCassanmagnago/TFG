@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
 	"io"
 	"log"
@@ -49,7 +50,7 @@ func union(cc map[int]bool, ccin map[int]bool) map[int]bool {
 func source(istream string, ine chan<- edge, inv chan<- map[int]bool) {
 
 	// Open the input file and close it after executing
-	file, err := os.Open(istream + ".requests")
+	file, err := os.Open("../tests/" + istream + ".requests")
 	check(err)
 	defer file.Close()
 
@@ -76,15 +77,16 @@ func source(istream string, ine chan<- edge, inv chan<- map[int]bool) {
 }
 
 // Sink stage
-func sink(ostream string, istream string, mode string, inv <-chan map[int]bool, endchan chan<- string) {
-
-	// Create output file and close it after executing
-	file, err := os.Create(ostream + ".wcc")
-	check(err)
-	defer file.Close()
+func sink(start time.Time, ostream string, istream string, mode string, inv <-chan map[int]bool, endchan chan<- string) {
 
 	// Print all connected components separated by newline
 	if mode == "print" {
+
+		// Create output file and close it after executing
+		file, err := os.Create("../results/" + ostream + ".wcc")
+		check(err)
+		defer file.Close()
+
 		for {
 			cc, ok := <-inv
 			if !ok {
@@ -99,10 +101,30 @@ func sink(ostream string, istream string, mode string, inv <-chan map[int]bool, 
 					file.WriteString(", ")
 				}
 			}
-			file.WriteString("}\n\n")
+			file.WriteString("}\n")
 		}
 	} else if mode == "test" {
-		//generate traces
+
+		// Create output file and close it after executing
+		file, err := os.Create("../results/dpwcc" + istream + ostream + ".csv")
+		check(err)
+		defer file.Close()
+		// Initialize csv writer, approach, data structure and row counter
+		w := csv.NewWriter(file)
+		approach := "DP-WCC"
+		data := [][]string{}
+		counter := 1
+		for {
+			_, ok := <-inv
+			if !ok {
+				break
+			}
+			t := time.Since(start)
+			row := []string{istream, approach, strconv.Itoa(counter), strconv.FormatFloat(t.Seconds(), 'f', -1, 64)}
+			data = append(data, row)
+			counter++
+		}
+		w.WriteAll(data)
 	}
 
 	// Send message through endchan to conclude the execution
@@ -201,7 +223,7 @@ func main() {
 	// Launch input, generator and sink stages
 	go source(os.Args[1], ine, inv)
 	go generator(ine, inv, outv)
-	go sink(os.Args[2], os.Args[1], os.Args[3], outv, endchan)
+	go sink(start, os.Args[2], os.Args[1], os.Args[3], outv, endchan)
 
 	// Wait for all the results to be generated and produce results
 	<-endchan
