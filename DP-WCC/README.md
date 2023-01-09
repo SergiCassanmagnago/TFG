@@ -1,6 +1,6 @@
 # Implementation of the Dynamic Pipeline WCC algorithm
 
-To execute dp_wcc.go in print mode, run:
+*To execute dp_wcc.go in print mode, run:*
 
 go run dpwcc.go input output print
 
