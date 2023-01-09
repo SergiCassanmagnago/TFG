@@ -1,6 +1,6 @@
 # Implementation of the Dynamic Pipeline WCC algorithm
 
-To execute dp_wcc.go in print mode, run:
+**To execute dp_wcc.go in print mode, run:**
 
 go run dpwcc.go input output print
 
@@ -8,7 +8,7 @@ where input is a file with the .requests extension where each line corresponds t
 
 dp_wcc.go will produce an output.wcc file containing the different weakly connected components of the graph depicted in network.requests
 
-To execute dp_wcc.go in test mode, run:
+**To execute dp_wcc.go in test mode, run:**
 
 go run dpwcc.go input output test
 
