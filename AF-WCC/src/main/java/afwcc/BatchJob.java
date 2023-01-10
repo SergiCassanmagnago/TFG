@@ -25,6 +25,7 @@ import org.apache.flink.api.java.aggregation.Aggregations;
 import org.apache.flink.api.java.functions.FunctionAnnotation;
 import org.apache.flink.api.java.operators.DeltaIteration;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.api.java.ExecutionEnvironment;
@@ -91,12 +92,10 @@ public class BatchJob {
 		if (params.has("test")){
 			test = params.get("input");
 			approach = "AF-WCC";
-			counter = 1;
 
 			//Create connected components and produce traces
-			DataSet<Tuple4<String, String, Integer, Double>> result = cc
+			DataSet<Tuple3<String, String, Double>> result = cc
 					.groupBy(1)
-					//.sortGroup(1, Order.ASCENDING)
 					.reduceGroup(new Traces());
 
 			result.writeAsCsv("../results/afwcc"+test+params.get("test"), OVERWRITE).setParallelism(1);
@@ -214,10 +213,10 @@ public class BatchJob {
 	}
 
 	public static class Traces
-			implements GroupReduceFunction<Tuple2<Integer, Integer>, Tuple4<String, String, Integer, Double>> {
+			implements GroupReduceFunction<Tuple2<Integer, Integer>, Tuple3<String, String, Double>> {
 
 		@Override
-		public void reduce(Iterable<Tuple2<Integer, Integer>> iterable, Collector<Tuple4<String, String, Integer, Double>> collector) {
+		public void reduce(Iterable<Tuple2<Integer, Integer>> iterable, Collector<Tuple3<String, String, Double>> collector) {
 
 			HashSet<Integer> vertexes = new HashSet<>();
 
@@ -226,8 +225,7 @@ public class BatchJob {
 				vertexes.add(t.f0);
 			}
 
-			Tuple4<String, String, Integer, Double> trace = new Tuple4<>(test, approach, counter, (System.nanoTime() - start)* 1e-9);
-			counter += 1;
+			Tuple3<String, String, Double> trace = new Tuple3<>(test, approach, (System.nanoTime() - start)* 1e-9);
 			collector.collect(trace);
 		}
 	}
