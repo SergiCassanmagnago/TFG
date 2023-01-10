@@ -19,14 +19,12 @@
 package afwcc;
 
 import org.apache.flink.api.common.functions.*;
-import org.apache.flink.api.common.operators.Order;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.aggregation.Aggregations;
 import org.apache.flink.api.java.functions.FunctionAnnotation;
 import org.apache.flink.api.java.operators.DeltaIteration;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
-import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.util.Collector;
@@ -59,7 +57,7 @@ public class BatchJob {
 
 		// Read and parse edges from input file
 		DataSet<String> lines = env.readTextFile("../tests/" + params.get("input") + ".requests");
-		DataSet<Tuple2<Integer, Integer>> edges = lines.map(new Parser());
+		DataSet<Tuple2<Integer, Integer>> edges = lines.map(new Parser()).flatMap(new UndirectEdge());
 
 		// Process vertex data
 		DataSet<Integer> vertices = edges.flatMap(new CollectVertex()).distinct();

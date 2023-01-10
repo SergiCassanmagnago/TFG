@@ -62,14 +62,14 @@ func source(istream string, ine chan<- edge, inv chan<- map[int]bool) {
 			break
 		}
 		check(err)
-		if e.x <= 0 || e.y <= 0 {
+		if e.x < 0 || e.y < 0 {
 			fmt.Println("Incorrect edge format on input file")
 			break
 		}
 		ine <- e
 	}
 	close(ine)
-
+	fmt.Println("Source ok")
 	// Send EOF signal to the next stage when all edges have been sent
 	inv <- map[int]bool{-1: true}
 	close(inv)
