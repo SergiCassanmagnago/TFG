@@ -36,15 +36,9 @@ import static org.apache.flink.core.fs.FileSystem.WriteMode.OVERWRITE;
 
 public class BatchJob {
 
-	public  static String test;
-	public static String approach;
-	public static int counter;
-
-	public static long start;
-
 	public static void main(String[] args) throws Exception {
 
-		start = System.nanoTime();
+		long start = System.nanoTime();
 
 		// Check input parameters
 		final ParameterTool params = ParameterTool.fromArgs(args);
@@ -88,23 +82,22 @@ public class BatchJob {
 
 		// Emit the resulting connected components
 		if (params.has("test")){
-			test = params.get("input");
-			approach = "AF-WCC";
+			String test = params.get("input");
 
 			//Create connected components and produce traces
-			DataSet<Tuple3<String, String, Double>> result = cc
+			DataSet<HashSet<Integer>> resultSet = cc
 					.groupBy(1)
-					.reduceGroup(new Traces());
-
-			result.writeAsCsv("../results/afwcc"+test+params.get("test"), OVERWRITE).setParallelism(1);
+					.reduceGroup(new ConnectedComponents());
+			List<HashSet<Integer>> results = resultSet.collect();
+			OutputTrace(test, "AF-WCC", 1, start, "../results/afwcc"+test+params.get("test")+".csv", results);
 		}
 		else if (params.has("output")) {
 			//Group vertices according to the connected component they belong to
-			DataSet<HashSet<Integer>> result = cc
+			DataSet<HashSet<Integer>> resultSet = cc
 					.groupBy(1)
 					.reduceGroup(new ConnectedComponents());
 
-			List<HashSet<Integer>> results = result.collect();
+			List<HashSet<Integer>> results = resultSet.collect();
 			OutputFile(start, params.get("output"), results);
 			cc.writeAsText(params.get("output"), OVERWRITE).setParallelism(1);
 		} else throw new java.lang.RuntimeException("Use --output to specify output path\n");
@@ -210,41 +203,51 @@ public class BatchJob {
 		}
 	}
 
-	public static class Traces
-			implements GroupReduceFunction<Tuple2<Integer, Integer>, Tuple3<String, String, Double>> {
-
-		@Override
-		public void reduce(Iterable<Tuple2<Integer, Integer>> iterable, Collector<Tuple3<String, String, Double>> collector) {
-
-			HashSet<Integer> vertexes = new HashSet<>();
-
-			// Add all vertexes of the group to the set
-			for (Tuple2<Integer, Integer> t : iterable) {
-				vertexes.add(t.f0);
-			}
-
-			Tuple3<String, String, Double> trace = new Tuple3<>(test, approach, (System.nanoTime() - start)* 1e-9);
-			collector.collect(trace);
-		}
-	}
-
 	// *************************************************************************
 	//     I/O METHODS
 	// *************************************************************************
 
-	// Parses edges from the specified input file and returns them in a list of tuples.
-	public static List<Tuple2<Integer, Integer>> getEdges(File file) throws FileNotFoundException {
-		List<Tuple2<Integer, Integer>> edges = new ArrayList<>();
+	// Outputs the answer traces associated with the resulting WCCs.
+	public static void OutputTrace(String test, String approach, Integer counter, long start, String file, List<HashSet<Integer>> results) throws IOException {
 
-		Scanner scan = new Scanner(file);
-		int vertex1;
-		int vertex2;
-		while (scan.hasNextLine()){
-			vertex1 = scan.nextInt();
-			vertex2 = scan.nextInt();
-			edges.add(Tuple2.of(vertex1, vertex2));
+		// Print elapsed time for convenience
+		long finish = System.nanoTime();
+		long timeElapsed = finish - start;
+		System.out.println("###################\n" + "Time duration: " + timeElapsed*1e-9 + "seconds\n#######################");
+
+		// Create an array containing arrays of strings, each corresponding to a trace
+		ArrayList<ArrayList<String>> data = new ArrayList<>();
+
+		// Generate traces
+		for(int i = 0; i < results.size(); i++){
+			ArrayList<String> trace = new ArrayList<>();
+			trace.add(test);
+			trace.add(approach);
+			trace.add(counter.toString());
+			trace.add("" + timeElapsed*1e-9);
+			data.add(trace);
+			counter += 1;
 		}
-		return edges;
+
+		// Erase previous content of the file if it exists
+		PrintWriter writer = new PrintWriter(file);
+		writer.print("");
+		writer.close();
+
+		// Write the connected components separated by newline
+		FileWriter fw = new FileWriter(file,true);
+		for (ArrayList<String> record : data) {
+			StringBuilder line = new StringBuilder();
+			for (int i = 0; i < record.size(); i++) {
+				line.append(record.get(i));
+				if (i != record.size() - 1) {
+					line.append(',');
+				}
+			}
+			line.append("\n");
+			fw.write(line.toString());
+		}
+		fw.close();
 	}
 
 	// Outputs the resulting connected components in the specified file.
