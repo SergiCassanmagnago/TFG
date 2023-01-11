@@ -210,7 +210,7 @@ func main() {
 
 	start := time.Now()
 
-	// Channel transporting requests
+	// Channel transporting edges
 	ine := make(chan edge)
 
 	// Channels transporting sets of connected vertices
