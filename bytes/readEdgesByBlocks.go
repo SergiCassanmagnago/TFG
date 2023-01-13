@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	set "github.com/deckarep/golang-set/v2"
 )
 
 // Edges are formed by pairs of vertexes (x,y)
@@ -55,7 +57,7 @@ func openFile(istream string) []string {
 }
 
 // Source stage
-func source(istream string, ine chan<- edge, inv chan<- map[int]bool) {
+func source(istream string, ine chan<- edge, inv chan<- set.Set[int]) {
 
 	temp := openFile(istream)
 
@@ -74,12 +76,14 @@ func source(istream string, ine chan<- edge, inv chan<- map[int]bool) {
 	}
 	close(ine)
 	// Send EOF signal to the next stage when all edges have been sent
-	inv <- map[int]bool{-1: true}
+	v := set.NewSet[int]()
+	v.Add(-1)
+	inv <- v
 	close(inv)
 }
 
 // Sink stage
-func sink(start time.Time, ostream string, istream string, mode string, inv <-chan map[int]bool, endchan chan<- string) {
+func sink(start time.Time, ostream string, istream string, mode string, inv <-chan set.Set[int], endchan chan<- string) {
 
 	// Print all connected components separated by newline
 	if mode == "print" {
@@ -94,16 +98,8 @@ func sink(start time.Time, ostream string, istream string, mode string, inv <-ch
 			if !ok {
 				break
 			}
-			file.WriteString("{")
-			i := 0
-			for node := range cc {
-				file.WriteString(strconv.Itoa(node))
-				i++
-				if i != len(cc) {
-					file.WriteString(", ")
-				}
-			}
-			file.WriteString("}\n")
+			file.WriteString(cc.String()[3:])
+			file.WriteString("\n")
 		}
 	} else if mode == "test" {
 
@@ -113,7 +109,7 @@ func sink(start time.Time, ostream string, istream string, mode string, inv <-ch
 		defer file.Close()
 		// Initialize csv writer, approach, data structure and row counter
 		w := csv.NewWriter(file)
-		approach := "Golang_DP-WCC"
+		approach := "DP-WCC"
 		data := [][]string{}
 		counter := 1
 		for {
@@ -135,7 +131,7 @@ func sink(start time.Time, ostream string, istream string, mode string, inv <-ch
 }
 
 // Generator stage
-func generator(ine <-chan edge, inv <-chan map[int]bool, outv chan<- map[int]bool) {
+func generator(ine <-chan edge, inv <-chan set.Set[int], outv chan<- set.Set[int]) {
 
 	// Actor1 Phase: Creates a new filter stage upon receiving a new edge
 	for {
@@ -144,8 +140,11 @@ func generator(ine <-chan edge, inv <-chan map[int]bool, outv chan<- map[int]boo
 			break
 		}
 		ineNew := make(chan edge)
-		invNew := make(chan map[int]bool)
-		go filter(ine, inv, ineNew, invNew, map[int]bool{e.x: true, e.y: true})
+		invNew := make(chan set.Set[int])
+		cc := set.NewSet[int]()
+		cc.Add(e.x)
+		cc.Add(e.y)
+		go filter(ine, inv, ineNew, invNew, cc)
 		ine = ineNew
 		inv = invNew
 	}
@@ -153,7 +152,7 @@ func generator(ine <-chan edge, inv <-chan map[int]bool, outv chan<- map[int]boo
 	// Actor2 Phase: Sends connected components to the sink stage
 	for {
 		g, ok := <-inv
-		if _, b := g[-1]; !b && ok {
+		if b := g.Contains(-1); !b && ok {
 			outv <- g
 		} else {
 			break
@@ -163,8 +162,8 @@ func generator(ine <-chan edge, inv <-chan map[int]bool, outv chan<- map[int]boo
 }
 
 // Filter stage used for grouping edges into connected components
-func filter(ine <-chan edge, inv <-chan map[int]bool,
-	oute chan<- edge, outv chan<- map[int]bool, cc map[int]bool) {
+func filter(ine <-chan edge, inv <-chan set.Set[int],
+	oute chan<- edge, outv chan<- set.Set[int], cc set.Set[int]) {
 
 	/* Actor1 Phase: Receives edges and adds them to its connected component if they are connected,
 	otherwise they are sent to the next stage */
@@ -175,10 +174,10 @@ func filter(ine <-chan edge, inv <-chan map[int]bool,
 		}
 
 		// if cc contains x, then y is added to cc
-		if _, ok := cc[e.x]; ok {
-			cc[e.y] = true
-		} else if _, ok := cc[e.y]; ok { // otherwise, if cc contains y, then x is added to cc
-			cc[e.x] = true
+		if b := cc.Contains(e.x); b {
+			cc.Add(e.y)
+		} else if b := cc.Contains(e.y); b { // otherwise, if cc contains y, then x is added to cc
+			cc.Add(e.x)
 		} else { // otherwise r is passed to the next stage
 			oute <- e
 		}
@@ -191,11 +190,11 @@ func filter(ine <-chan edge, inv <-chan map[int]bool,
 	for {
 		g, _ := <-inv
 		// EOF signal received, so no more sets of vertices will be received
-		if _, ok := g[-1]; ok {
+		if b := g.Contains(-1); b {
 			break
 		} else {
-			if intersection(cc, g) { // the components are connected so they are merged
-				cc = union(cc, g)
+			if s := cc.Intersect(g); s.Cardinality() == 0 { // the components are connected so they are merged
+				cc = cc.Union(g)
 			} else { // the components are not connected so they are passed separately
 				outv <- g
 			}
@@ -204,7 +203,9 @@ func filter(ine <-chan edge, inv <-chan map[int]bool,
 
 	// Sends its own connected component and EOF signal to the next stage before finishing its execution
 	outv <- cc
-	outv <- map[int]bool{-1: true}
+	v := set.NewSet[int]()
+	v.Add(-1)
+	outv <- v
 	close(outv)
 }
 
@@ -216,8 +217,8 @@ func main() {
 	ine := make(chan edge)
 
 	// Channels transporting sets of connected vertices
-	inv := make(chan map[int]bool)
-	outv := make(chan map[int]bool)
+	inv := make(chan set.Set[int])
+	outv := make(chan set.Set[int])
 
 	// Channel used for waiting for all the results to be generated
 	endchan := make(chan string)

@@ -36,9 +36,13 @@ import static org.apache.flink.core.fs.FileSystem.WriteMode.OVERWRITE;
 
 public class BatchJob {
 
+	public  static String test;
+	public static String approach;
+
+	public static long start;
 	public static void main(String[] args) throws Exception {
 
-		long start = System.nanoTime();
+		start = System.nanoTime();
 
 		// Check input parameters
 		final ParameterTool params = ParameterTool.fromArgs(args);
@@ -82,14 +86,15 @@ public class BatchJob {
 
 		// Emit the resulting connected components
 		if (params.has("test")){
-			String test = params.get("input");
+			test = params.get("input");
+			approach = "AF-WCC";
 
 			//Create connected components and produce traces
-			DataSet<HashSet<Integer>> resultSet = cc
+			DataSet<Tuple3<String, String, Double>> result = cc
 					.groupBy(1)
-					.reduceGroup(new ConnectedComponents());
-			List<HashSet<Integer>> results = resultSet.collect();
-			OutputTrace(test, "AF-WCC", 1, start, "../results/afwcc"+test+params.get("test")+".csv", results);
+					.reduceGroup(new Traces());
+
+			result.writeAsCsv("../results/afwcc"+test+params.get("test"), OVERWRITE).setParallelism(1);
 		}
 		else if (params.has("output")) {
 			//Group vertices according to the connected component they belong to
@@ -200,6 +205,24 @@ public class BatchJob {
 				vertexes.add(t.f0);
 			}
 			collector.collect(vertexes);
+		}
+	}
+
+	public static class Traces
+			implements GroupReduceFunction<Tuple2<Integer, Integer>, Tuple3<String, String, Double>> {
+
+		@Override
+		public void reduce(Iterable<Tuple2<Integer, Integer>> iterable, Collector<Tuple3<String, String, Double>> collector) {
+
+			HashSet<Integer> vertexes = new HashSet<>();
+
+			// Add all vertexes of the group to the set
+			for (Tuple2<Integer, Integer> t : iterable) {
+				vertexes.add(t.f0);
+			}
+
+			Tuple3<String, String, Double> trace = new Tuple3<>(test, approach, (System.nanoTime() - start)* 1e-9);
+			collector.collect(trace);
 		}
 	}
 
