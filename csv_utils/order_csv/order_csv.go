@@ -14,6 +14,10 @@ func check(e error) {
 	}
 }
 
+func remove(slice []string, s int) []string {
+	return append(slice[:s], slice[s+1:]...)
+}
+
 func main() {
 	file, err := os.Open(os.Args[1])
 	check(err)
@@ -23,14 +27,17 @@ func main() {
 	records, err := r.ReadAll()
 	check(err)
 
+	for i := 0; i < len(records); i++ {
+		remove(records[i], 2)
+	}
+
 	sort.Slice(records, func(i, j int) bool {
-		a, _ := strconv.ParseInt(records[i][2], 10, 64)
-		b, _ := strconv.ParseInt(records[j][2], 10, 64)
+		a, _ := strconv.ParseFloat(records[i][2], 64)
+		b, _ := strconv.ParseFloat(records[j][2], 64)
 		return a < b
 	})
 
 	for i := 0; i < len(records); i++ {
-		records[i] = append(records[i], records[i][2])
 		records[i][2] = strconv.Itoa(i + 1)
 	}
 
