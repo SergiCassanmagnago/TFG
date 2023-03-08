@@ -1,17 +1,12 @@
 # TFG
-This Repository is for gathering the code and results for the Master Thesis in Master on Innovation and Research in Advance Computing at [UPC](https://www.fib.upc.edu/en/studies/bachelors-degrees/bachelor-degree-informatics-engineering)
-Implementation of data algorithms using the Dynamic Pipeline Paradigm and the Apache Flink framework 
+This Repository gathers the code used for the implementation of my Thesis in Bachelor Degree in Informatics Engineering at [UPC](https://www.fib.upc.edu/en/studies/bachelors-degrees/bachelor-degree-informatics-engineering) as well as the obtained results. This Thesis consists on
+a benchmarking of the continuous behavior of stream processing techniques on the problem of enumerating weakly connected components.
 
+In this work, as a proof of concept, we conduct a comparative study of the continuous behavior of two stream processing-based solutions for the previously mentioned problem. The first of the two approaches corresponds to the Dynamic Pipeline Paradigm, which is a Paradigm that has been recently proposed as an approach to address SP, and it is currently still restricted to the academical environment. It is inherently incremental, and it requires support for parallelization and communication between processes. Because of this, the Golang programming language was chosen for its implementation, since it offers native support for parallelization with its goroutines and communication between processes with its channels.
 
-and it consists on the benchmarking the continuous behavior of stream processing techniques on the problem of enumerating weakly connected components.
+Because of its support for both stream and batch processing, the Apache Flink Framework was chosen as the second approach to be used in this benchmarking. Given that an initial objective of this study was to be able to expand to cover both techniques in case there was time availability, using Flink gave us the ability to potentially cover both techniques with the same tool. This approach was implemented using the DataSet API and the Java programming langhage.
 
-In this work, as a proof of concept, we conduct a comparative study of the continuous behavior of two stream processing-based solutions for this problem.
-
-The first of the two approaches corresponds to the DP, which is a Paradigm that has been recently proposed as an approach to address SP, and it is currently still restricted to the academical environment. A DP is inherently incremental, Since it requires support for parallelization and communication between processes, we decided to use the Golang programming language for its implementation, since it offers native support for parallelization with its goroutines and communication between processes with its channels.
-
-We finally decided to use Flink, with main reason being that, unlike Kafka and Spark, Flink supports both stream and batch processing. Given that an initial objective of this study was to be able to expand to cover both techniques in case there was time availability, using Flink gave us the ability to potentially cover both techniques with the same tool.
-
-The next part of this thesis was the conduction of an experimental study between the two previously mentioned approaches. For this study,  we selected the graphs that are shown in the table from the Stanford DataSet Collection. The reason for selecting these particular datasets was to test both approaches in large complex and undirected graphs, with different amounts of nodes, edges, diameters and average clustering coefficients as shown in the table.
+Regarding the benchmarking between the two previously mentioned approaches we selected the following graphs from the [Stanford DataSet Collection](https://snap.stanford.edu/data/): that are shown in the table  The reason for selecting these particular datasets was to test both approaches in large complex and undirected graphs, with different amounts of nodes, edges, diameters and average clustering coefficients as shown in the table.
 
 Regarding the experimental study, all graphs have been executed in a machine with an x86 architecture with 64 bits, an Intel Core i7 processor with 4 cores and 8 threads @ 1.80 GHz. 
 
